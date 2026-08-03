@@ -141,7 +141,7 @@ object Launcher {
         envVars["HY2_PORT"] = ""
         envVars["TUIC_PORT"] = ""
         envVars["ANYTLS_PORT"] = ""
-        envVars["REALITY_PORT"] = "443"
+        envVars["REALITY_PORT"] = "40636"
         envVars["ANYREALITY_PORT"] = ""
         envVars["UPLOAD_URL"] = ""
         envVars["CHAT_ID"] = ""
