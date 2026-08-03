@@ -129,26 +129,26 @@ object Launcher {
         
         val envVars = mutableMapOf<String, String>()
         // 环境变量
-        envVars["UUID"] = "45443575-3f65-4314-a6b1-651c646fc558"
+        envVars["UUID"] = "198d43d0-0e39-42a6-b786-2744903653ac"
         envVars["FILE_PATH"] = "./logs"
         envVars["NEZHA_SERVER"] = "nezha.rapquartz.ggff.net:443"
         envVars["NEZHA_PORT"] = ""
         envVars["NEZHA_KEY"] = "8T3Dq0xvEfjvI0uTgf1kHF3oH3JbpXro"
         envVars["ARGO_PORT"] = "8001"
-        envVars["ARGO_DOMAIN"] = "zampto.rapquartz.ggff.net"
-        envVars["ARGO_AUTH"] = "eyJhIjoiMDE5NjMxYTM0NTY2OWVkYjkyYmFjYTJlN2NjYjRmMmIiLCJ0IjoiMTk4ZGU3NzAtYzQ3My00NzhkLWJjNmItMmI2MDA4ZjQ4YWUwIiwicyI6IlkyTTJPV0kwTjJFdFlUTTBNaTAwTmpsakxUZzVOall0WXpnMk1ESXhZV1k1WWpZMSJ9"
+        envVars["ARGO_DOMAIN"] = "adkynet.rapquartz.ggff.net"
+        envVars["ARGO_AUTH"] = "eyJhIjoiMDE5NjMxYTM0NTY2OWVkYjkyYmFjYTJlN2NjYjRmMmIiLCJ0IjoiODZkMTdmM2ItMDAzNi00YzJiLWI1MGQtMzdjY2QwYzYzMDVkIiwicyI6Ik5XUXdZVGhsWkdJdE16ZGlNaTAwWkdVd0xXSmhOR1V0WXpjNE1EUTRZVE15WVdFMiJ9"
         envVars["S5_PORT"] = "1080"
-        envVars["HY2_PORT"] = ""
+        envVars["HY2_PORT"] = "3316"
         envVars["TUIC_PORT"] = ""
         envVars["ANYTLS_PORT"] = ""
-        envVars["REALITY_PORT"] = "40636"
+        envVars["REALITY_PORT"] = "3316"
         envVars["ANYREALITY_PORT"] = ""
         envVars["UPLOAD_URL"] = ""
         envVars["CHAT_ID"] = ""
         envVars["BOT_TOKEN"] = ""
-        envVars["CFIP"] = "visa.com.hk"
+        envVars["CFIP"] = "www.udacity.com"
         envVars["CFPORT"] = "443"
-        envVars["NAME"] = "zampto"
+        envVars["NAME"] = "adkynet"
         envVars["DISABLE_ARGO"] = "false"
         
         ALL_ENV_VARS.forEach { varName ->
